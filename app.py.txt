@@ -1,0 +1,186 @@
+# ==========================================================
+# Cricket DRS - Main Flask Application
+# ==========================================================
+
+from flask import Flask, render_template, request, url_for
+import os
+
+# ==========================================================
+# IMPORT AI MODULES
+# ==========================================================
+
+from utils.ball import detect_ball
+
+# Future modules
+# from utils.frontfoot import detect_frontfoot
+# from utils.waist import detect_waist
+
+# ==========================================================
+# CREATE FLASK APP
+# ==========================================================
+
+app = Flask(__name__)
+
+# ==========================================================
+# PROJECT DIRECTORIES
+# ==========================================================
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+UPLOAD_FOLDER = os.path.join(
+    BASE_DIR,
+    "static",
+    "uploads"
+)
+
+OUTPUT_FOLDER = os.path.join(
+    BASE_DIR,
+    "static",
+    "outputs"
+)
+
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
+app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
+
+# ==========================================================
+# HOME PAGE
+# ==========================================================
+
+@app.route("/")
+def home():
+    return render_template("index.html")
+
+
+# ==========================================================
+# BALL DETECTION
+# ==========================================================
+
+@app.route("/ball", methods=["GET", "POST"])
+def ball():
+
+    if request.method == "POST":
+
+        if "video" not in request.files:
+            return render_template(
+                "ball.html",
+                result="No video selected."
+            )
+
+        video = request.files["video"]
+
+        if video.filename == "":
+            return render_template(
+                "ball.html",
+                result="No video selected."
+            )
+
+        # ------------------------------------------
+        # Save Uploaded Video
+        # ------------------------------------------
+
+        upload_path = os.path.join(
+            app.config["UPLOAD_FOLDER"],
+            video.filename
+        )
+
+        video.save(upload_path)
+
+        print("\n==============================")
+        print("Uploaded Video")
+        print(upload_path)
+        print("==============================")
+
+        # ------------------------------------------
+        # Run Ball Detection
+        # ------------------------------------------
+
+        detected_video, result = detect_ball(upload_path)
+
+        print("\n==============================")
+        print("Returned From ball.py")
+        print("Detected Video :", detected_video)
+        print("Result :", result)
+        print("==============================")
+
+        # ------------------------------------------
+        # Render Page
+        # ------------------------------------------
+
+        return render_template(
+
+            "ball.html",
+
+            result=result,
+
+            uploaded_video=url_for(
+                "static",
+                filename="uploads/" + video.filename
+            ),
+
+            detected_video=url_for(
+                "static",
+                filename=detected_video
+            )
+        )
+
+    # GET Request
+
+    return render_template(
+        "ball.html"
+    )
+
+
+# ==========================================================
+# FRONT FOOT NO BALL
+# ==========================================================
+
+@app.route("/frontfoot", methods=["GET", "POST"])
+def frontfoot():
+
+    return render_template(
+        "frontfoot.html"
+    )
+
+
+# ==========================================================
+# WAIST HEIGHT NO BALL
+# ==========================================================
+
+@app.route("/waist", methods=["GET", "POST"])
+def waist():
+
+    return render_template(
+        "waist.html"
+    )
+
+
+# ==========================================================
+# 404 PAGE
+# ==========================================================
+
+@app.errorhandler(404)
+def page_not_found(error):
+
+    return render_template(
+        "index.html"
+    )
+
+
+# ==========================================================
+# MAIN
+# ==========================================================
+
+if __name__ == "__main__":
+
+    print("===================================")
+    print("      Cricket DRS Started")
+    print("===================================")
+
+    app.run(
+        host="127.0.0.1",
+        port=5000,
+        debug=True
+    )

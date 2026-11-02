@@ -1,0 +1,416 @@
+# ==========================================================
+# utils/ball.py
+# Cricket Ball Detection Module
+# ==========================================================
+
+import os
+import cv2
+from ultralytics import YOLO
+
+
+
+# ==========================================================
+# FIND PROJECT ROOT
+# ==========================================================
+
+# Current file:
+# Cricket_DRS/utils/ball.py
+#
+# Move one level up:
+# Cricket_DRS
+
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
+
+
+
+# ==========================================================
+# MODEL LOCATION
+# ==========================================================
+
+MODEL_PATH = os.path.join(
+    BASE_DIR,
+    "models",
+    "ball.pt"
+)
+
+
+
+# ==========================================================
+# OUTPUT LOCATION
+# ==========================================================
+
+OUTPUT_DIR = os.path.join(
+    BASE_DIR,
+    "static",
+    "outputs"
+)
+
+
+os.makedirs(
+    OUTPUT_DIR,
+    exist_ok=True
+)
+
+
+OUTPUT_VIDEO = os.path.join(
+    OUTPUT_DIR,
+    "ball_result.mp4"
+)
+
+
+
+# ==========================================================
+# LOAD YOLO MODEL ONCE
+# ==========================================================
+
+print("==============================")
+print("Loading Ball Model")
+print("==============================")
+
+
+if not os.path.exists(MODEL_PATH):
+
+    raise FileNotFoundError(
+        f"""
+ball.pt not found.
+
+Expected location:
+
+{MODEL_PATH}
+
+Your folder should be:
+
+Cricket_DRS
+ |
+ ├── models
+ |      └── ball.pt
+ |
+ └── utils
+        └── ball.py
+"""
+    )
+
+
+ball_model = YOLO(
+    MODEL_PATH
+)
+
+
+print("Ball Model Loaded Successfully")
+print("Classes:", ball_model.names)
+
+
+
+
+# ==========================================================
+# SETTINGS
+# ==========================================================
+
+CONF_THRESHOLD = 0.25
+IMG_SIZE = 640
+
+
+
+
+# ==========================================================
+# BALL DETECTION FUNCTION
+# ==========================================================
+
+def detect_ball(video_path):
+
+
+    print("==============================")
+    print("Processing Video")
+    print(video_path)
+    print("==============================")
+
+
+    cap = cv2.VideoCapture(
+        video_path
+    )
+
+
+    if not cap.isOpened():
+
+        return None, "Unable to open video"
+
+
+
+    width = int(
+        cap.get(
+            cv2.CAP_PROP_FRAME_WIDTH
+        )
+    )
+
+
+    height = int(
+        cap.get(
+            cv2.CAP_PROP_FRAME_HEIGHT
+        )
+    )
+
+
+    fps = cap.get(
+        cv2.CAP_PROP_FPS
+    )
+
+
+    if fps <= 0:
+
+        fps = 30
+
+
+
+    writer = cv2.VideoWriter(
+
+        OUTPUT_VIDEO,
+
+        cv2.VideoWriter_fourcc(
+            *"mp4v"
+        ),
+
+        fps,
+
+        (
+            width,
+            height
+        )
+    )
+
+
+
+    frame_number = 0
+    detected_frames = 0
+
+
+
+    while True:
+
+
+        ret, frame = cap.read()
+
+
+        if not ret:
+
+            break
+
+
+
+        frame_number += 1
+
+
+
+        # ======================================
+        # YOLO PREDICTION
+        # ======================================
+
+
+        results = ball_model.predict(
+
+            frame,
+
+            conf=CONF_THRESHOLD,
+
+            imgsz=IMG_SIZE,
+
+            verbose=False
+
+        )
+
+
+
+        best_box = None
+        best_conf = 0
+
+
+
+        # ======================================
+        # KEEP HIGHEST CONFIDENCE BALL
+        # ======================================
+
+
+        for result in results:
+
+
+            for box in result.boxes:
+
+
+                conf = float(
+                    box.conf[0]
+                )
+
+
+                if conf > best_conf:
+
+                    best_conf = conf
+                    best_box = box
+
+
+
+        # ======================================
+        # DRAW BALL
+        # ======================================
+
+
+        if best_box is not None:
+
+
+            detected_frames += 1
+
+
+
+            x1, y1, x2, y2 = map(
+
+                int,
+
+                best_box.xyxy[0].tolist()
+
+            )
+
+
+
+            cv2.rectangle(
+
+                frame,
+
+                (x1,y1),
+
+                (x2,y2),
+
+                (0,255,0),
+
+                3
+
+            )
+
+
+
+            cv2.putText(
+
+                frame,
+
+                f"BALL {best_conf:.2f}",
+
+                (x1,y1-10),
+
+                cv2.FONT_HERSHEY_SIMPLEX,
+
+                0.7,
+
+                (0,255,0),
+
+                2
+
+            )
+
+
+
+            # Ball center
+
+            cx = int(
+                (x1+x2)/2
+            )
+
+            cy = int(
+                (y1+y2)/2
+            )
+
+
+            cv2.circle(
+
+                frame,
+
+                (cx,cy),
+
+                5,
+
+                (0,0,255),
+
+                -1
+
+            )
+
+
+
+        else:
+
+
+            cv2.putText(
+
+                frame,
+
+                "BALL NOT DETECTED",
+
+                (30,50),
+
+                cv2.FONT_HERSHEY_SIMPLEX,
+
+                1,
+
+                (0,0,255),
+
+                3
+
+            )
+
+
+
+        # Frame number
+
+        cv2.putText(
+
+            frame,
+
+            f"Frame: {frame_number}",
+
+            (30,90),
+
+            cv2.FONT_HERSHEY_SIMPLEX,
+
+            0.8,
+
+            (255,255,255),
+
+            2
+
+        )
+
+
+
+        writer.write(
+            frame
+        )
+
+
+
+    cap.release()
+    writer.release()
+
+
+
+    print("==============================")
+    print("Detection Complete")
+    print("Total Frames:", frame_number)
+    print("Ball Frames:", detected_frames)
+    print("==============================")
+
+
+
+    if detected_frames > 0:
+
+        status = "Ball detected successfully"
+
+    else:
+
+        status = "Ball not detected"
+
+
+
+    return (
+        "outputs/ball_result.mp4",
+        status
+    )

@@ -1,0 +1,218 @@
+import os
+import cv2
+import math
+from ultralytics import YOLO
+
+# =====================================================
+# Project Paths
+# =====================================================
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+PLAYER_MODEL_PATH = os.path.join(BASE_DIR, "models", "player.pt")
+BALL_MODEL_PATH = os.path.join(BASE_DIR, "models", "ball.pt")
+
+OUTPUT_DIR = os.path.join(BASE_DIR, "static", "outputs")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+OUTPUT_IMAGE = os.path.join(OUTPUT_DIR, "result.jpg")
+
+WAIST_RATIO = 0.58
+
+print("Loading AI Models...")
+
+player_model = YOLO(PLAYER_MODEL_PATH)
+ball_model = YOLO(BALL_MODEL_PATH)
+
+
+# =====================================================
+# Prediction
+# =====================================================
+
+def predict(image_path):
+
+    img = cv2.imread(image_path)
+
+    if img is None:
+        return None, "Unable to read image."
+
+    output = img.copy()
+
+    img_h, img_w = output.shape[:2]
+
+    player_results = player_model(img, verbose=False)
+    ball_results = ball_model(img, verbose=False)
+
+    ####################################################
+    # BALL
+    ####################################################
+
+    ball_found = False
+    bx = 0
+    by = 0
+
+    if len(ball_results[0].boxes) > 0:
+
+        boxes = ball_results[0].boxes
+
+        best = boxes.conf.argmax()
+
+        box = boxes.xyxy[best].cpu().numpy()
+
+        bx = int((box[0] + box[2]) / 2)
+        by = int((box[1] + box[3]) / 2)
+
+        ball_found = True
+
+        cv2.rectangle(
+            output,
+            (int(box[0]), int(box[1])),
+            (int(box[2]), int(box[3])),
+            (0,0,255),
+            2
+        )
+
+        cv2.circle(
+            output,
+            (bx,by),
+            6,
+            (0,0,255),
+            -1
+        )
+
+    if not ball_found:
+
+        cv2.imwrite(OUTPUT_IMAGE, output)
+
+        return "/static/outputs/result.jpg", "Ball Not Detected"
+
+    ####################################################
+    # PLAYER
+    ####################################################
+
+    if len(player_results[0].boxes) == 0:
+
+        cv2.imwrite(OUTPUT_IMAGE, output)
+
+        return "static/outputs/result.jpg", "Player Not Detected"
+
+    player_boxes = player_results[0].boxes.xyxy.cpu().numpy()
+
+    closest = None
+
+    minimum = 999999
+
+    for box in player_boxes:
+
+        px1,py1,px2,py2 = map(int,box)
+
+        if (py2-py1) < 100:
+            continue
+
+        cx = (px1+px2)/2
+        cy = (py1+py2)/2
+
+        d = math.hypot(cx-bx,cy-by)
+
+        if d < minimum:
+
+            minimum = d
+            closest = box
+
+    if closest is None:
+
+        cv2.imwrite(OUTPUT_IMAGE, output)
+
+        return "/static/outputs/result.jpg", "Player Not Found"
+
+    ####################################################
+    # DRAW PLAYER
+    ####################################################
+
+    px1,py1,px2,py2 = map(int,closest)
+
+    cv2.rectangle(
+        output,
+        (px1,py1),
+        (px2,py2),
+        (0,255,0),
+        2
+    )
+
+    cv2.putText(
+        output,
+        "Batsman",
+        (px1,py1-10),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0,255,0),
+        2
+    )
+
+    ####################################################
+    # WAIST LINE
+    ####################################################
+
+    player_height = py2-py1
+
+    waist_y = int(py1 + WAIST_RATIO*player_height)
+
+    cv2.line(
+        output,
+        (0,waist_y),
+        (img_w,waist_y),
+        (0,255,255),
+        2
+    )
+
+    cv2.putText(
+        output,
+        "Waist Threshold",
+        (20,waist_y-10),
+        cv2.FONT_HERSHEY_SIMPLEX,
+        0.7,
+        (0,255,255),
+        2
+    )
+
+    ####################################################
+    # VERDICT
+    ####################################################
+
+    if by < waist_y:
+
+        verdict = "NO BALL"
+
+        colour = (0,0,255)
+
+    else:
+
+        verdict = "LEGAL DELIVERY"
+
+        colour = (0,255,0)
+
+    cv2.rectangle(
+        output,
+        (20,20),
+        (430,80),
+        (40,40,40),
+        -1
+    )
+
+    cv2.putText(
+        output,
+        verdict,
+        (35,60),
+        cv2.FONT_HERSHEY_DUPLEX,
+        1,
+        colour,
+        2
+    )
+
+    ####################################################
+    # SAVE
+    ####################################################
+
+    cv2.imwrite(OUTPUT_IMAGE, output)
+
+    return "/static/outputs/result.jpg", verdict

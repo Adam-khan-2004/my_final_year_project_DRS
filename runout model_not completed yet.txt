@@ -1,0 +1,76 @@
+
+
+# ================================
+# 2. Mount Google Drive
+# ================================
+from google.colab import drive
+drive.mount('/content/drive')
+
+# ================================
+# 3. Import Libraries
+# ================================
+from ultralytics import YOLO
+import cv2
+import matplotlib.pyplot as plt
+
+# ================================
+# 4. Model Paths
+# ================================
+crease_model_path = "/content/drive/MyDrive/fyp_noball/noball_model/weights/best.pt"
+player_ball_model_path = "/content/drive/MyDrive/fyp_runout/train_results/player_detector/weights/best.pt"
+stumps_model_path = "/content/drive/MyDrive/fyp_runout/pretrain_runout/runout_training/weights/best.pt"
+
+# ================================
+# 5. Load Models
+# ================================
+print("Loading models...")
+
+crease_model = YOLO(crease_model_path)
+player_ball_model = YOLO(player_ball_model_path)
+stumps_model = YOLO(stumps_model_path)
+
+print("Models loaded successfully")
+
+# ================================
+# 6. Input Image
+# ================================
+image_path = "/content/drive/MyDrive/fyp_runout/runout.PNG"
+
+# ================================
+# 7. Run Detection
+# ================================
+print("Running detections...")
+
+crease_results = crease_model.predict(source=image_path, conf=0.25)
+player_ball_results = player_ball_model.predict(source=image_path, conf=0.25)
+stumps_results = stumps_model.predict(source=image_path, conf=0.25)
+
+# ================================
+# 8. Show Results
+# ================================
+
+# Crease detection
+img1 = crease_results[0].plot()
+plt.figure(figsize=(8,6))
+plt.imshow(cv2.cvtColor(img1, cv2.COLOR_BGR2RGB))
+plt.title("Crease Detection")
+plt.axis("off")
+plt.show()
+
+# Player + Ball detection
+img2 = player_ball_results[0].plot()
+plt.figure(figsize=(8,6))
+plt.imshow(cv2.cvtColor(img2, cv2.COLOR_BGR2RGB))
+plt.title("Player and Ball Detection")
+plt.axis("off")
+plt.show()
+
+# Stumps detection
+img3 = stumps_results[0].plot()
+plt.figure(figsize=(8,6))
+plt.imshow(cv2.cvtColor(img3, cv2.COLOR_BGR2RGB))
+plt.title("Stumps Detection")
+plt.axis("off")
+plt.show()
+
+print("Detection complete.")

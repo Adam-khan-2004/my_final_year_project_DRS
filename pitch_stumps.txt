@@ -1,0 +1,112 @@
+#training finetuning
+# ====================================
+# YOLOv8 Training + Fine Tuning (SAFE)
+# ====================================
+
+!pip install -q ultralytics
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+from ultralytics import YOLO
+import torch
+
+# -------------------------
+# Detect device automatically
+# -------------------------
+device = "cuda" if torch.cuda.is_available() else "cpu"
+print("Using device:", device)
+
+# -------------------------
+# Dataset
+# -------------------------
+DATASET_PATH = "/content/drive/MyDrive/fyp_stumps_pitch/data.yaml"
+
+# -------------------------
+# Load pretrained model
+# -------------------------
+model = YOLO("yolov8m.pt")
+
+# -------------------------
+# Train + Fine Tune
+# -------------------------
+results = model.train(
+
+    data=DATASET_PATH,
+    epochs=50,
+    imgsz=640,
+
+    batch=8,          # smaller batch for CPU
+    workers=2,
+    patience=10,
+
+    optimizer="AdamW",
+    lr0=0.001,
+    cos_lr=True,
+
+    device=device,
+
+    # augmentation
+    hsv_h=0.015,
+    hsv_s=0.7,
+    hsv_v=0.4,
+    degrees=10,
+    translate=0.1,
+    scale=0.5,
+    fliplr=0.5,
+
+    project="/content/drive/MyDrive/FYP_YOLO_RESULTS",
+    name="cricket_detector",
+    exist_ok=True
+)
+
+print("Training Complete")
+
+print("Best Model Saved At:")
+print("/content/drive/MyDrive/FYP_YOLO_RESULTS/cricket_detector/weights/best.pt")
+
+#......................................................
+#testing model
+from ultralytics import YOLO
+import cv2
+from google.colab.patches import cv2_imshow
+
+# Load trained model
+model = YOLO("/content/drive/MyDrive/fyp_stumps_pitch/training_results/cricket_detector/weights/best.pt")
+
+# Video path
+video_path = "/content/drive/MyDrive/fyp_noball/noball2.mp4"  # change if needed
+
+# Open video
+cap = cv2.VideoCapture(video_path)
+
+if not cap.isOpened():
+    print("Error: Cannot open video")
+else:
+    print("Video loaded successfully")
+
+frame_count = 0
+
+while True:
+
+    ret, frame = cap.read()
+
+    if not ret:
+        break
+
+    # Run detection
+    results = model(frame, imgsz=640, conf=0.3)
+
+    # Draw bounding boxes
+    annotated_frame = results[0].plot()
+
+    # Show frame
+    cv2_imshow(annotated_frame)
+
+    frame_count += 1
+
+    # optional limit to avoid huge output
+    if frame_count > 200:
+        break
+
+cap.release()

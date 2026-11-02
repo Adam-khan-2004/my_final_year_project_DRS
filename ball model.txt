@@ -1,0 +1,27 @@
+# ==============================
+# STEP 3: VIDEO INFERENCE
+# ==============================
+
+# Path to trained model
+MODEL_PATH = "/content/drive/MyDrive/fyp_ball_detection/ball_detection_training/weights/best.pt"
+
+# Input video path
+VIDEO_PATH = "/content/drive/MyDrive/fyp_ball_detection/cricket.mp4"
+
+# Output results folder
+OUTPUT_FOLDER = "/content/drive/MyDrive/fyp_ball_detection/results"
+
+# Load trained model
+model = YOLO(MODEL_PATH)
+
+# Run inference
+results = model.predict(
+    source=VIDEO_PATH,
+    save=True,
+    project=OUTPUT_FOLDER,
+    name="drs_output",
+    conf=0.25,
+    device=0
+)
+
+print("Inference completed. Video saved in /results folder.")

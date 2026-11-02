@@ -1,0 +1,98 @@
+from ultralytics import YOLO
+import cv2
+
+# --- Configuration ---
+MODEL_PATH = "/content/drive/MyDrive/fyp_noball/noball_model/weights/best.pt"
+VIDEO_PATH = "/content/drive/MyDrive/fyp_noball/noball2.mp4"
+OUTPUT_PATH = "/content/drive/MyDrive/fyp_noball/output_video_complete.mp4"
+
+# Load model
+model = YOLO(MODEL_PATH)
+
+# Open video
+cap = cv2.VideoCapture(VIDEO_PATH)
+frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = int(cap.get(cv2.CAP_PROP_FPS))
+
+# Video writer
+fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+out = cv2.VideoWriter(OUTPUT_PATH, fourcc, fps, (frame_width, frame_height))
+
+# --- Video-level detection flag ---
+no_ball_detected = False
+margin = 6  # Allow slight tolerance for foot crossing
+
+frame_count = 0
+print("Processing video...")
+
+while True:
+    ret, frame = cap.read()
+    if not ret:
+        break
+    frame_count += 1
+
+    # Resize frame to model input size
+    input_frame = cv2.resize(frame, (640, 640))
+
+    # Run YOLOv8 prediction
+    results = model.predict(input_frame, conf=0.25, verbose=False, imgsz=640)
+
+    crease_boxes = []
+    shoe_boxes = []
+
+    # --- Extract detections ---
+    for r in results:
+        for box in r.boxes:
+            cls = int(box.cls[0])
+            label = model.names[cls].lower()
+            x1, y1, x2, y2 = box.xyxy[0].tolist()
+            # Scale coordinates back to original frame
+            x1 = int(x1 * frame_width / 640)
+            x2 = int(x2 * frame_width / 640)
+            y1 = int(y1 * frame_height / 640)
+            y2 = int(y2 * frame_height / 640)
+
+            if "crease" in label or "line" in label:
+                crease_boxes.append((x1, y1, x2, y2))
+            if "shoe" in label:
+                shoe_boxes.append((x1, y1, x2, y2))
+
+    # --- Only proceed if both crease and shoes are detected ---
+    if len(crease_boxes) > 0 and len(shoe_boxes) > 0:
+
+        # --- Crease line ---
+        # Use center of most forward crease box for better alignment
+        crease_box = max(crease_boxes, key=lambda c: c[0])
+        crease_x = int((crease_box[0] + crease_box[2]) / 2)
+        cv2.line(frame, (crease_x, 0), (crease_x, frame_height), (0, 140, 255), 3)
+
+        # --- Front foot selection ---
+        # Choose shoe closest to crease line (forward-most)
+        front_foot = max(shoe_boxes, key=lambda s: s[2])
+        fx1, fy1, fx2, fy2 = front_foot
+        cv2.rectangle(frame, (fx1, fy1), (fx2, fy2), (0, 255, 0), 3)
+
+        # --- Back foot visualization (optional) ---
+        # Draw all other shoes in blue
+        for s in shoe_boxes:
+            if s != front_foot:
+                sx1, sy1, sx2, sy2 = s
+                cv2.rectangle(frame, (sx1, sy1), (sx2, sy2), (255, 0, 0), 2)
+
+        # --- No Ball Logic ---
+        if fx2 > (crease_x - margin):
+            no_ball_detected = True
+
+    # --- Overlay status text ---
+    status_text = "NO BALL" if no_ball_detected else "LEGAL BALL / WAITING"
+    color = (0, 0, 255) if no_ball_detected else (0, 180, 0)
+    cv2.putText(frame, f"STATUS: {status_text}", (30, 60),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.5, color, 3, cv2.LINE_AA)
+
+    # Write frame to output
+    out.write(frame)
+
+cap.release()
+out.release()
+print(f"Done! Video saved at {OUTPUT_PATH}")

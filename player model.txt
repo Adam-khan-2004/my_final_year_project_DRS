@@ -1,0 +1,19 @@
+from ultralytics import YOLO
+
+MODEL_PATH = "/content/drive/MyDrive/fyp_runout/train_results/player_detector/weights/best.pt"
+VIDEO_PATH = "/content/drive/MyDrive/fyp_runout/player_detection.mp4"
+
+model = YOLO(MODEL_PATH)
+
+results = model.predict(
+    source=VIDEO_PATH,
+    conf=0.25,        # lowered threshold
+    iou=0.5,
+    save=True,
+    save_txt=False,
+    project="/content/drive/MyDrive/fyp_runout",
+    name="video_results",
+    exist_ok=True
+)
+
+print("Detection Completed ✅")
